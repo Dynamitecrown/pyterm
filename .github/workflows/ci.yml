@@ -64,7 +64,7 @@ jobs:
         run: pip install -e ".[build]"
 
       - name: Build
-        run: pyinstaller --noconsole --onefile --name pyterm pyterm/__main__.py
+        run: pyinstaller --noconsole --onefile --name pyterm launcher.py
 
       - uses: actions/upload-artifact@v4
         with:

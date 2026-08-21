@@ -9,9 +9,16 @@ Python 3.10 or newer.
 
 ### Windows
 
-Easy way: double-click **`run-windows.bat`**. First run builds the virtual
-environment and installs dependencies (~150 MB, mostly PySide6); every run
-after that just launches the app.
+Two ways to run it:
+
+- **From source:** double-click **`run-windows.bat`**. First run builds the
+  virtual environment and installs dependencies (~150 MB, mostly PySide6);
+  every run after that just launches the app. Requires Python.
+- **Standalone .exe:** double-click **`build-windows.bat`** once to produce
+  `dist\pyterm.exe` (also needs Python, just for the build step). After
+  that, `pyterm.exe` runs on its own — no Python required, safe to pin to
+  the taskbar or copy to another machine. Re-run `build-windows.bat` after
+  pulling changes to refresh it.
 
 Manual way, in PowerShell from the project folder:
 
@@ -138,8 +145,13 @@ where Backspace misbehaves, flip `Qt.Key_Backspace` to `b"\x08"`.
 
 ```bash
 pip install pyinstaller
-pyinstaller --noconsole --onefile --name pyterm pyterm/__main__.py
+pyinstaller --noconsole --onefile --name pyterm launcher.py
 ```
+
+(`launcher.py` at the repo root, not `pyterm/__main__.py` — PyInstaller runs
+the entry script as a bare top-level module with no parent package, which
+breaks the package's relative imports if you point it at `__main__.py`
+directly.)
 
 On Windows that produces `dist\pyterm.exe`, which runs on machines with no
 Python installed. Note that one-file PyInstaller builds are a common
