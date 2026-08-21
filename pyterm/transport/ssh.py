@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from collections.abc import Callable
 from pathlib import Path
 
@@ -94,6 +95,18 @@ class SSHTransport(Transport):
         except (paramiko.SSHException, OSError) as exc:
             client.close()
             raise TransportError(f"Could not connect to {p.host}: {exc}") from exc
+
+        # Paramiko doesn't set this itself. Without it, Nagle's algorithm
+        # can sit on the single-byte packets an interactive shell sends per
+        # keystroke waiting for an ACK, which is the classic "SSH typing
+        # feels laggy" complaint -- nothing to do with actual network RTT.
+        transport = client.get_transport()
+        if transport is not None and transport.sock is not None:
+            try:
+                transport.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except OSError:
+                pass
 
         try:
             chan = client.invoke_shell(

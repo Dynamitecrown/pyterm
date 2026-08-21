@@ -84,6 +84,8 @@ class TerminalWidget(QWidget):
         self._sel_head: tuple[int, int] | None = None
         self._selecting = False
 
+        self._last_cursor_row: int | None = None
+
         self._blink_on = True
         self._blink = QTimer(self)
         self._blink.timeout.connect(self._toggle_blink)
@@ -142,8 +144,26 @@ class TerminalWidget(QWidget):
     def feed(self, data: bytes) -> None:
         self.terminal.feed(data)
         self._clear_selection()
-        if not self._repaint.isActive():
-            self._repaint.start(REPAINT_INTERVAL)
+
+        # pyte tells us exactly which rows changed -- usually just the one
+        # line being typed on. Repainting only that (plus wherever the
+        # cursor was and now is) means a keystroke's echo doesn't have to
+        # redraw, or re-run syntax highlighting over, the whole visible
+        # scrollback on every character.
+        dirty_rows = self.terminal.pop_dirty()
+        cursor_row = self.terminal.cursor.y
+        if self._last_cursor_row is not None:
+            dirty_rows.add(self._last_cursor_row)
+        dirty_rows.add(cursor_row)
+        self._last_cursor_row = cursor_row
+
+        if self._repaint.isActive():
+            return  # a repaint is already queued and will pick this up too
+        if dirty_rows:
+            top = min(dirty_rows) * self._ch
+            height = (max(dirty_rows) - min(dirty_rows) + 1) * self._ch
+            self.update(QRect(0, int(top), self.width(), int(height) + 1))
+        self._repaint.start(REPAINT_INTERVAL)
 
     def clear(self) -> None:
         self.terminal.clear()

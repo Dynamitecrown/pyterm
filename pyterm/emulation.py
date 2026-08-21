@@ -32,6 +32,17 @@ class Terminal:
     def feed(self, data: bytes) -> None:
         self.stream.feed(data)
 
+    def pop_dirty(self) -> set[int]:
+        """Row indices touched since the last call, then reset for the next.
+
+        pyte already tracks this internally (Screen.dirty) for exactly this
+        purpose: so a renderer doesn't have to redraw rows nothing touched.
+        """
+        dirty = self.screen.dirty
+        rows = set(dirty)
+        dirty.clear()
+        return rows
+
     # -- geometry ----------------------------------------------------------
 
     @property

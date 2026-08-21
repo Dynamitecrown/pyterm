@@ -121,8 +121,11 @@ Each session runs a `ReaderThread` that blocks on `transport.read()` and
 emits bytes via a Qt signal. Signals queue across threads, so pyte and the
 widget are only ever touched from the GUI thread — pyte is not thread-safe.
 
-Rendering is throttled to one repaint per 25 ms. Without that, a `show run`
-dump triggers a full repaint per packet and the UI crawls.
+Rendering is throttled to one repaint per 25 ms, and only repaints the rows
+pyte reports as actually changed (`Screen.dirty`) plus wherever the cursor
+was and now is — a keystroke's echo repaints one line, not the whole
+visible viewport. Without the interval throttle, a `show run` dump would
+still trigger a repaint per packet and the UI would crawl.
 
 ## Adding things
 
