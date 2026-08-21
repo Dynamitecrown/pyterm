@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -52,15 +53,23 @@ class SessionSidebar(QWidget):
         self.tabs.addTab(self.ssh_page, "SSH")
         self.tabs.addTab(self.serial_page, "Serial")
         self.tabs.addTab(self.term_page, "Advanced")
+        # QTabWidget sizes its pane to fit the *tallest* page by default, so
+        # switching to the shorter SSH tab used to leave a dead gap where
+        # Serial's extra rows would have been. Only the visible page keeps
+        # a real size hint; the rest are told to take no vertical space.
+        self.tabs.currentChanged.connect(self._sync_tab_sizes)
+        self._sync_tab_sizes(self.tabs.currentIndex())
 
         connect_btn = QPushButton("Connect")
+        connect_btn.setObjectName("connectButton")
         connect_btn.clicked.connect(self._connect_clicked)
 
         kind_row = QHBoxLayout()
         kind_row.addWidget(QLabel("Type"))
         kind_row.addWidget(self.kind, 1)
 
-        heading = QLabel("<b>New session</b>")
+        heading = QLabel("New session")
+        heading.setObjectName("sectionHeading")
 
         form_box = QVBoxLayout()
         form_box.addWidget(heading)
@@ -83,8 +92,11 @@ class SessionSidebar(QWidget):
         for button in (load_btn, save_btn, del_btn):
             saved_row.addWidget(button)
 
+        saved_heading = QLabel("Saved sessions")
+        saved_heading.setObjectName("sectionHeading")
+
         saved_box = QVBoxLayout()
-        saved_box.addWidget(QLabel("<b>Saved sessions</b>"))
+        saved_box.addWidget(saved_heading)
         saved_box.addWidget(self.saved, 1)
         saved_box.addLayout(saved_row)
 
@@ -133,6 +145,15 @@ class SessionSidebar(QWidget):
         self.term_page.apply(p)
         p.kind = kind
         return p
+
+    def _sync_tab_sizes(self, index: int) -> None:
+        for i in range(self.tabs.count()):
+            page = self.tabs.widget(i)
+            policy = page.sizePolicy()
+            policy.setVerticalPolicy(
+                QSizePolicy.Preferred if i == index else QSizePolicy.Ignored)
+            page.setSizePolicy(policy)
+        self.tabs.updateGeometry()
 
     def _sync_kind(self) -> None:
         kind = self.kind.currentData()

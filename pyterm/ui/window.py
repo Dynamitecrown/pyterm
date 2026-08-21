@@ -22,6 +22,7 @@ from .dialogs import confirm_host_key, prompt_secret
 from .preferences import PreferencesDialog
 from .session import SessionTab
 from .sidebar import SessionSidebar
+from .style import build_stylesheet
 
 
 class MainWindow(QMainWindow):
@@ -34,7 +35,11 @@ class MainWindow(QMainWindow):
         self.settings_store = SettingsStore()
         self.settings = self.settings_store.load()
 
+        QApplication.instance().setStyleSheet(
+            build_stylesheet(self.settings.colors()["cursor"]))
+
         self.sidebar = SessionSidebar(self.store, defaults=self.settings)
+        self.sidebar.setObjectName("sidebar")
         self.sidebar.connect_requested.connect(self.open_profile)
 
         self.tabs = QTabWidget()
@@ -237,6 +242,7 @@ class MainWindow(QMainWindow):
             theme = self.settings.colors()
             for i in range(self.tabs.count()):
                 self.tabs.widget(i).apply_theme(theme)
+            QApplication.instance().setStyleSheet(build_stylesheet(theme["cursor"]))
 
     # -- helpers -----------------------------------------------------------
 
