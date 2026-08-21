@@ -1,29 +1,23 @@
-"""Connection dialog: PuTTY-style saved sessions on the left, settings right."""
+"""Connection setting forms (SSH/Serial/Advanced), embedded in the sidebar."""
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDialog,
-    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
-    QListWidget,
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTabWidget,
-    QVBoxLayout,
     QWidget,
 )
 
-from ..profiles import Profile, ProfileStore
+from ..profiles import Profile
 from ..transport.serialport import BAUD_RATES, PARITY, list_ports
 
 
@@ -240,160 +234,6 @@ class TerminalPage(QWidget):
         p.font_family = self.font_family.text().strip()
         p.font_size = self.font_size.value()
         p.log_path = self.log_path.text().strip()
-
-
-class ConnectDialog(QDialog):
-    """Returns a Profile via .result_profile once accepted."""
-
-    def __init__(self, store: ProfileStore, profile: Profile | None = None,
-                 parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("New session")
-        self.resize(720, 460)
-        self.store = store
-        self.result_profile: Profile | None = None
-
-        # Left: saved sessions
-        self.saved = QListWidget()
-        self.saved.addItems(store.names())
-        self.saved.itemDoubleClicked.connect(self._load_and_accept)
-        self.saved.currentTextChanged.connect(self._load_selected)
-
-        load_btn = QPushButton("Load")
-        save_btn = QPushButton("Save…")
-        del_btn = QPushButton("Delete")
-        load_btn.clicked.connect(self._load_selected_clicked)
-        save_btn.clicked.connect(self._save)
-        del_btn.clicked.connect(self._delete)
-
-        left = QVBoxLayout()
-        left.addWidget(QLabel("Saved sessions"))
-        left.addWidget(self.saved, 1)
-        for button in (load_btn, save_btn, del_btn):
-            left.addWidget(button)
-
-        left_box = QGroupBox()
-        left_box.setLayout(left)
-        left_box.setFixedWidth(220)
-
-        # Right: connection settings
-        self.kind = QComboBox()
-        self.kind.addItem("SSH", "ssh")
-        self.kind.addItem("Serial", "serial")
-        self.kind.currentIndexChanged.connect(self._sync_kind)
-
-        self.ssh_page = SSHPage()
-        self.serial_page = SerialPage()
-        self.term_page = TerminalPage()
-
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self.ssh_page, "SSH")
-        self.tabs.addTab(self.serial_page, "Serial")
-        self.tabs.addTab(self.term_page, "Terminal")
-
-        kind_row = QHBoxLayout()
-        kind_row.addWidget(QLabel("Connection type"))
-        kind_row.addWidget(self.kind)
-        kind_row.addStretch(1)
-
-        right = QVBoxLayout()
-        right.addLayout(kind_row)
-        right.addWidget(self.tabs, 1)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Open | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Open).setText("Connect")
-        buttons.accepted.connect(self._accept)
-        buttons.rejected.connect(self.reject)
-        right.addWidget(buttons)
-
-        outer = QHBoxLayout(self)
-        outer.addWidget(left_box)
-        outer.addLayout(right, 1)
-
-        self._apply_profile(profile or Profile())
-
-    # -- profile <-> widgets ----------------------------------------------
-
-    def _apply_profile(self, p: Profile):
-        index = self.kind.findData(p.kind)
-        self.kind.setCurrentIndex(max(index, 0))
-        self.ssh_page.load(p)
-        self.serial_page.load(p)
-        self.term_page.load(p)
-        self._current_name = p.name
-        self._sync_kind()
-
-    def _collect(self) -> Profile:
-        p = Profile(name=self._current_name)
-        kind = self.kind.currentData()
-        # Apply both pages so switching type doesn't lose the other's settings.
-        self.ssh_page.apply(p)
-        self.serial_page.apply(p)
-        self.term_page.apply(p)
-        p.kind = kind
-        return p
-
-    def _sync_kind(self):
-        kind = self.kind.currentData()
-        self.tabs.setCurrentIndex(0 if kind == "ssh" else 1)
-        self.tabs.setTabEnabled(0, kind == "ssh")
-        self.tabs.setTabEnabled(1, kind == "serial")
-
-    # -- saved list --------------------------------------------------------
-
-    def _load_selected(self, name: str):
-        pass  # single click only highlights; Load/double-click commits
-
-    def _load_selected_clicked(self):
-        item = self.saved.currentItem()
-        if item is None:
-            return
-        profile = self.store.get(item.text())
-        if profile is not None:
-            self._apply_profile(profile)
-
-    def _load_and_accept(self, item):
-        profile = self.store.get(item.text())
-        if profile is not None:
-            self._apply_profile(profile)
-            self._accept()
-
-    def _save(self):
-        profile = self._collect()
-        name, ok = QInputDialog.getText(self, "Save session", "Name:",
-                                        text=profile.name)
-        if not ok or not name.strip():
-            return
-        profile.name = name.strip()
-        self._current_name = profile.name
-        self.store.put(profile)
-        self.saved.clear()
-        self.saved.addItems(self.store.names())
-
-    def _delete(self):
-        item = self.saved.currentItem()
-        if item is None:
-            return
-        if QMessageBox.question(self, "Delete session",
-                                f"Delete “{item.text()}”?") != QMessageBox.Yes:
-            return
-        self.store.remove(item.text())
-        self.saved.clear()
-        self.saved.addItems(self.store.names())
-
-    # -- accept ------------------------------------------------------------
-
-    def _accept(self):
-        page = self.ssh_page if self.kind.currentData() == "ssh" else self.serial_page
-        error = page.validate()
-        if error:
-            QMessageBox.warning(self, "Incomplete", error)
-            return
-        profile = self._collect()
-        if profile.name in ("", "New session"):
-            profile.name = (profile.host or profile.device or "session")
-        self.result_profile = profile
-        self.accept()
 
 
 def prompt_secret(parent, title: str, label: str) -> tuple[str, bool]:

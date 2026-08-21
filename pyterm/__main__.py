@@ -16,7 +16,6 @@ def main() -> int:
 
     window = MainWindow()
     window.show()
-    window.new_session()  # open the connection dialog on launch, like PuTTY
     return app.exec()
 
 

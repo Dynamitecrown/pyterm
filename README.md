@@ -62,6 +62,8 @@ On Linux you'll need to be in the `dialout` group to open serial ports
 
 ## What works today
 
+- **One window** — a new-session panel sits permanently on the left; no
+  popup dialog to dismiss before you can see the terminal
 - **SSH** — password, private key, or agent auth; host key verification
   against `~/.ssh/known_hosts` with a fingerprint prompt for unknown hosts
 - **Serial** — port auto-detection, full 5–8 / N-E-O-M-S / 1-1.5-2 control,
@@ -73,6 +75,10 @@ On Linux you'll need to be in the `dialout` group to open serial ports
 - **Scrollback** — mouse wheel or Shift+PgUp/PgDn
 - **PuTTY mouse habits** — selecting copies, right-click pastes
 - **Session logging** — raw byte log to a file per profile
+- **Preferences** (`Ctrl+,`) — colour theme (six built-in presets or fully
+  custom foreground/background/cursor/selection colours), default font and
+  size for new sessions, and default scrollback. Sidebar can be hidden with
+  `Ctrl+B`.
 
 Passwords are deliberately never written to disk.
 
@@ -81,6 +87,7 @@ Passwords are deliberately never written to disk.
 ```
 pyterm/
 ├── profiles.py            saved sessions (JSON, no secrets)
+├── settings.py            app-wide preferences (theme, default font)
 ├── emulation.py           pyte wrapper — the screen model
 ├── transport/
 │   ├── __init__.py        Transport ABC + registry
@@ -90,8 +97,10 @@ pyterm/
     ├── keys.py            Qt key event → xterm byte sequence
     ├── terminal.py        renders the screen, collects input
     ├── session.py         one tab: transport + reader thread + widget
-    ├── dialogs.py         connection / saved-session dialog
-    └── window.py          tabs, menus, status bar
+    ├── dialogs.py         SSH/Serial/Advanced setting forms
+    ├── sidebar.py         new-session panel + saved-session list
+    ├── preferences.py     theme/font preferences dialog
+    └── window.py          splitter, tabs, menus, status bar
 ```
 
 Three layers, and they only touch each other through narrow interfaces:
@@ -117,8 +126,11 @@ dump triggers a full repaint per packet and the UI crawls.
 "Telnet")`, and add it to `_load()`. Add the kind to the dialog's combo box.
 Nothing else changes.
 
-**Colour schemes:** the `PALETTE` dict at the top of `ui/terminal.py`. Move
-it into `Profile` to make it per-session.
+**Colour schemes:** the four theme colours (foreground/background/cursor/
+selection) live in `settings.py`'s `THEMES` dict and are app-wide, set via
+Preferences. The 16-colour ANSI palette used for SGR codes is still the
+fixed `PALETTE` dict at the top of `ui/terminal.py` — move it into
+`AppSettings` too if you want that themeable as well.
 
 **Keyboard tweaks:** `ui/keys.py` is a lookup table. If you hit an old box
 where Backspace misbehaves, flip `Qt.Key_Backspace` to `b"\x08"`.

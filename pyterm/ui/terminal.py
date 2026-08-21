@@ -60,7 +60,8 @@ class TerminalWidget(QWidget):
     size_changed = Signal(int, int)  # cols, rows
 
     def __init__(self, scrollback: int = 5000, font_family: str = "",
-                 font_size: int = 11, parent=None):
+                 font_size: int = 11, theme: dict[str, str] | None = None,
+                 parent=None):
         super().__init__(parent)
         self.terminal = Terminal(80, 24, scrollback)
 
@@ -70,6 +71,12 @@ class TerminalWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self._set_font(font_family, font_size)
+        self._fg = DEFAULT_FG
+        self._bg = DEFAULT_BG
+        self._cursor_color = CURSOR_COLOR
+        self._selection_bg = SELECTION_BG
+        if theme:
+            self._apply_theme(theme)
 
         self._sel_anchor: tuple[int, int] | None = None
         self._sel_head: tuple[int, int] | None = None
@@ -106,6 +113,18 @@ class TerminalWidget(QWidget):
     def set_font_config(self, family: str, size: int) -> None:
         self._set_font(family, size)
         self._apply_geometry()
+        self.update()
+
+    # -- theme ---------------------------------------------------------------
+
+    def _apply_theme(self, theme: dict[str, str]) -> None:
+        self._fg = theme.get("fg", DEFAULT_FG)
+        self._bg = theme.get("bg", DEFAULT_BG)
+        self._cursor_color = theme.get("cursor", CURSOR_COLOR)
+        self._selection_bg = theme.get("selection", SELECTION_BG)
+
+    def set_theme(self, theme: dict[str, str]) -> None:
+        self._apply_theme(theme)
         self.update()
 
     def sizeHint(self):
@@ -152,7 +171,7 @@ class TerminalWidget(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.fillRect(event.rect(), QColor(DEFAULT_BG))
+        painter.fillRect(event.rect(), QColor(self._bg))
 
         term = self.terminal
         buffer = term.buffer
@@ -185,16 +204,16 @@ class TerminalWidget(QWidget):
                         break
                     run_end += 1
 
-                fg = _resolve(char.fg, bold=char.bold, default=DEFAULT_FG)
-                bg = _resolve(char.bg, bold=False, default=DEFAULT_BG)
+                fg = _resolve(char.fg, bold=char.bold, default=self._fg)
+                bg = _resolve(char.bg, bold=False, default=self._bg)
                 if char.reverse:
                     fg, bg = bg, fg
                 if selected:
-                    bg = QColor(SELECTION_BG)
+                    bg = QColor(self._selection_bg)
 
                 rect = QRect(int(x * cw), int(top),
                              int((run_end - x) * cw) + 1, int(ch) + 1)
-                if bg != QColor(DEFAULT_BG):
+                if bg != QColor(self._bg):
                     painter.fillRect(rect, bg)
 
                 text = "".join(line[i].data for i in range(x, run_end))
@@ -225,17 +244,17 @@ class TerminalWidget(QWidget):
         rect = QRect(int(cur.x * self._cw), int(cur.y * self._ch),
                      int(self._cw) + 1, int(self._ch))
         if not self.hasFocus():
-            painter.setPen(QColor(CURSOR_COLOR))
+            painter.setPen(QColor(self._cursor_color))
             painter.drawRect(rect.adjusted(0, 0, -1, -1))
             return
         if not self._blink_on:
             return
 
-        painter.fillRect(rect, QColor(CURSOR_COLOR))
+        painter.fillRect(rect, QColor(self._cursor_color))
         char = term.buffer[cur.y][cur.x]
         if char.data.strip():
             painter.setFont(self._font_bold if char.bold else self._font)
-            painter.setPen(QColor(DEFAULT_BG))
+            painter.setPen(QColor(self._bg))
             painter.drawText(int(cur.x * self._cw),
                              int(cur.y * self._ch + self._baseline), char.data)
 

@@ -54,7 +54,8 @@ class SessionTab(QWidget):
     status_changed = Signal()
     title_changed = Signal(str)
 
-    def __init__(self, profile: Profile, transport: Transport, parent=None):
+    def __init__(self, profile: Profile, transport: Transport,
+                 theme: dict[str, str] | None = None, parent=None):
         super().__init__(parent)
         self.profile = profile
         self.transport = transport
@@ -65,6 +66,7 @@ class SessionTab(QWidget):
             scrollback=profile.scrollback,
             font_family=profile.font_family,
             font_size=profile.font_size,
+            theme=theme,
         )
         self.banner = QLabel()
         self.banner.setVisible(False)
@@ -157,6 +159,9 @@ class SessionTab(QWidget):
                          self.terminal.terminal.lines)
         self.status_changed.emit()
         return True
+
+    def apply_theme(self, theme: dict[str, str]) -> None:
+        self.terminal.set_theme(theme)
 
     def send_break(self) -> None:
         try:

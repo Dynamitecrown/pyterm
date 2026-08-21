@@ -6,13 +6,22 @@ from functools import partial
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QTabWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QMessageBox,
+    QSplitter,
+    QTabWidget,
+)
 
 from .. import transport as transport_mod
 from ..profiles import Profile, ProfileStore
+from ..settings import SettingsStore
 from ..transport import TransportError
-from .dialogs import ConnectDialog, confirm_host_key, prompt_secret
+from .dialogs import confirm_host_key, prompt_secret
+from .preferences import PreferencesDialog
 from .session import SessionTab
+from .sidebar import SessionSidebar
 
 
 class MainWindow(QMainWindow):
@@ -22,6 +31,11 @@ class MainWindow(QMainWindow):
         self.resize(1000, 640)
 
         self.store = ProfileStore()
+        self.settings_store = SettingsStore()
+        self.settings = self.settings_store.load()
+
+        self.sidebar = SessionSidebar(self.store, defaults=self.settings)
+        self.sidebar.connect_requested.connect(self.open_profile)
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
@@ -29,7 +43,15 @@ class MainWindow(QMainWindow):
         self.tabs.setDocumentMode(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._refresh_status)
-        self.setCentralWidget(self.tabs)
+
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(self.tabs)
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([300, 700])
+        self.setCentralWidget(self.splitter)
+        self.sidebar.setVisible(self.settings.show_sidebar)
 
         self.statusBar().showMessage("No session")
         self._build_menus()
@@ -66,6 +88,15 @@ class MainWindow(QMainWindow):
         terminal.addSeparator()
         self._add(terminal, "Send &break", "Ctrl+Shift+B", self.send_break)
 
+        view = self.menuBar().addMenu("&View")
+        self.toggle_sidebar_action = self._add(
+            view, "Toggle &sidebar", "Ctrl+B", self.toggle_sidebar)
+        self.toggle_sidebar_action.setCheckable(True)
+        self.toggle_sidebar_action.setChecked(self.settings.show_sidebar)
+
+        settings_menu = self.menuBar().addMenu("&Settings")
+        self._add(settings_menu, "&Preferences…", "Ctrl+,", self.open_preferences)
+
         help_menu = self.menuBar().addMenu("&Help")
         self._add(help_menu, "&Keyboard shortcuts", None, self.show_help)
 
@@ -90,9 +121,9 @@ class MainWindow(QMainWindow):
     # -- session management ------------------------------------------------
 
     def new_session(self) -> None:
-        dialog = ConnectDialog(self.store, parent=self)
-        if dialog.exec() and dialog.result_profile:
-            self.open_profile(dialog.result_profile)
+        if not self.sidebar.isVisible():
+            self.toggle_sidebar()
+        self.sidebar.reset_form()
 
     def duplicate_session(self) -> None:
         tab = self.current_tab()
@@ -121,7 +152,8 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-        tab = SessionTab(profile, transport, self)
+        tab = SessionTab(profile, transport, theme=self.settings.colors(),
+                         parent=self)
         index = self.tabs.addTab(tab, profile.name)
         self.tabs.setCurrentIndex(index)
         tab.title_changed.connect(partial(self._set_title, tab))
@@ -187,6 +219,25 @@ class MainWindow(QMainWindow):
         if tab is not None:
             tab.send_break()
 
+    # -- view / settings -----------------------------------------------------
+
+    def toggle_sidebar(self) -> None:
+        visible = not self.sidebar.isVisible()
+        self.sidebar.setVisible(visible)
+        self.toggle_sidebar_action.setChecked(visible)
+        self.settings.show_sidebar = visible
+        self.settings_store.save(self.settings)
+
+    def open_preferences(self) -> None:
+        dialog = PreferencesDialog(self.settings, parent=self)
+        if dialog.exec() and dialog.result_settings:
+            self.settings = dialog.result_settings
+            self.settings_store.save(self.settings)
+            self.sidebar.set_defaults(self.settings)
+            theme = self.settings.colors()
+            for i in range(self.tabs.count()):
+                self.tabs.widget(i).apply_theme(theme)
+
     # -- helpers -----------------------------------------------------------
 
     def current_tab(self) -> SessionTab | None:
@@ -216,7 +267,9 @@ class MainWindow(QMainWindow):
             "Ctrl+Shift+V   Paste     (right-click also pastes)\n"
             "Shift+PgUp/Dn  Scroll back through history\n"
             "Ctrl+Shift+L   Clear screen\n"
-            "Ctrl+Shift+B   Send break (serial only)"
+            "Ctrl+Shift+B   Send break (serial only)\n\n"
+            "Ctrl+B         Toggle sidebar\n"
+            "Ctrl+,         Preferences"
         ))
 
     def closeEvent(self, event) -> None:
