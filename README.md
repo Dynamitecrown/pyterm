@@ -1,0 +1,166 @@
+# PyTerm
+
+A tabbed SSH and serial terminal in Python — a PuTTY replacement you can
+actually read the source of.
+
+## Install
+
+Python 3.10 or newer.
+
+### Windows
+
+Easy way: double-click **`run-windows.bat`**. First run builds the virtual
+environment and installs dependencies (~150 MB, mostly PySide6); every run
+after that just launches the app.
+
+Manual way, in PowerShell from the project folder:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m pyterm
+```
+
+If `Activate.ps1` is blocked by the execution policy, either unblock it for
+that one shell:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+or skip PowerShell and use `cmd`, where `.venv\Scripts\activate.bat` has no
+such restriction.
+
+**Serial ports:** no permissions setup needed, but your USB console cable
+needs a driver. Check Device Manager ▸ *Ports (COM & LPT)* — if the adapter
+shows a yellow warning triangle, install the FTDI, Prolific, or Cisco driver
+for it first. The Refresh button in the Serial tab lists whatever Windows
+currently sees. COM10 and above work fine.
+
+**SSH agent:** paramiko talks to Pageant, so keys you already have loaded in
+PuTTY's agent work if you pick *SSH agent / default keys* as the auth method.
+
+### Linux / macOS
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m pyterm
+```
+
+On Linux you'll need to be in the `dialout` group to open serial ports
+(`sudo usermod -aG dialout $USER`, then log out and back in).
+
+## What works today
+
+- **SSH** — password, private key, or agent auth; host key verification
+  against `~/.ssh/known_hosts` with a fingerprint prompt for unknown hosts
+- **Serial** — port auto-detection, full 5–8 / N-E-O-M-S / 1-1.5-2 control,
+  RTS/CTS and XON/XOFF, and **send break** (Cisco password recovery)
+- **Tabs** — multiple sessions, movable, duplicate, reconnect in place
+- **Saved sessions** — JSON profiles, PuTTY-style load/save/delete
+- **Real VT100/ANSI emulation** — 16/256/truecolour, bold, underline,
+  reverse, scroll regions, cursor addressing. `nano` and `htop` behave.
+- **Scrollback** — mouse wheel or Shift+PgUp/PgDn
+- **PuTTY mouse habits** — selecting copies, right-click pastes
+- **Session logging** — raw byte log to a file per profile
+
+Passwords are deliberately never written to disk.
+
+## Layout
+
+```
+pyterm/
+├── profiles.py            saved sessions (JSON, no secrets)
+├── emulation.py           pyte wrapper — the screen model
+├── transport/
+│   ├── __init__.py        Transport ABC + registry
+│   ├── ssh.py             paramiko
+│   └── serialport.py      pyserial
+└── ui/
+    ├── keys.py            Qt key event → xterm byte sequence
+    ├── terminal.py        renders the screen, collects input
+    ├── session.py         one tab: transport + reader thread + widget
+    ├── dialogs.py         connection / saved-session dialog
+    └── window.py          tabs, menus, status bar
+```
+
+Three layers, and they only touch each other through narrow interfaces:
+
+1. **Transport** — anything that produces a byte stream. Doesn't know a
+   terminal exists.
+2. **Emulation** — bytes in, screen buffer out. Doesn't know Qt exists.
+3. **UI** — draws the buffer, sends keystrokes. Doesn't parse escape codes.
+
+### Threading
+
+Each session runs a `ReaderThread` that blocks on `transport.read()` and
+emits bytes via a Qt signal. Signals queue across threads, so pyte and the
+widget are only ever touched from the GUI thread — pyte is not thread-safe.
+
+Rendering is throttled to one repaint per 25 ms. Without that, a `show run`
+dump triggers a full repaint per packet and the UI crawls.
+
+## Adding things
+
+**A new transport (telnet, raw TCP, local shell):** write one file in
+`transport/`, subclass `Transport`, decorate with `@register("telnet",
+"Telnet")`, and add it to `_load()`. Add the kind to the dialog's combo box.
+Nothing else changes.
+
+**Colour schemes:** the `PALETTE` dict at the top of `ui/terminal.py`. Move
+it into `Profile` to make it per-session.
+
+**Keyboard tweaks:** `ui/keys.py` is a lookup table. If you hit an old box
+where Backspace misbehaves, flip `Qt.Key_Backspace` to `b"\x08"`.
+
+**Saved passwords:** hook the `keyring` package into
+`MainWindow._credentials_for()` — never into `profiles.py`.
+
+## Known gaps (roughly in the order I'd fix them)
+
+1. **Connect blocks the GUI thread.** Up to 12 s on an unreachable host.
+   Move `transport.connect()` into a worker and marshal the host-key and
+   password prompts back with a queued signal.
+2. **No X11 or port forwarding.** paramiko supports both; it's plumbing.
+3. **No search in scrollback.** pyte gives you the text, so this is a
+   dialog plus a highlight pass in `paintEvent`.
+4. **No mouse reporting** (modes 1000/1002/1006), so clicking in `vim`
+   doesn't position the cursor.
+5. **`HistoryScreen` scrollback is a little quirky** on resize — a known
+   pyte rough edge, and the main reason a bigger project would eventually
+   swap the emulator out.
+6. **No SFTP browser, no scripting/expect.** Both are natural next tabs.
+
+## Shipping it
+
+```bash
+pip install pyinstaller
+pyinstaller --noconsole --onefile --name pyterm pyterm/__main__.py
+```
+
+On Windows that produces `dist\pyterm.exe`, which runs on machines with no
+Python installed. Note that one-file PyInstaller builds are a common
+antivirus false positive — if Defender quarantines it, drop `--onefile` and
+ship the `dist\pyterm\` folder instead.
+
+```
+```
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest
+ruff check pyterm tests
+```
+
+The test suite covers the emulation layer (escape sequences, colour, resize,
+scrollback, split UTF-8), key encoding, profile persistence, the transport
+registry, and an end-to-end session over a real pty. The pty tests skip on
+Windows. CI runs everything on Windows and Linux across Python 3.10 and 3.13.
+
+Tagging a release as `vX.Y.Z` and pushing the tag builds a Windows .exe as a
+workflow artifact.

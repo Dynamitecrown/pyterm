@@ -1,0 +1,56 @@
+# --- Virtual environments -------------------------------------------------
+# Your .venv lives inside the project folder. Never commit it: it is hundreds
+# of megabytes, platform-specific, and has absolute paths baked into it.
+.venv/
+venv/
+env/
+ENV/
+
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.installed.cfg
+
+# --- Build artifacts ------------------------------------------------------
+build/
+dist/
+*.spec
+
+# --- Test / tooling caches ------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Editors --------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- OS -------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Things that must never leave your machine ----------------------------
+# Session logs capture everything that scrolled past, including any password
+# you typed at a console prompt before the far end started echoing asterisks.
+*.log
+logs/
+session*.txt
+
+# Saved sessions normally live in %APPDATA%\pyterm, but if you ever point the
+# store at the project folder for testing, keep it out of the history.
+sessions.json
+
+# Keys and host data. Belt and braces -- these should never be in here at all.
+*.pem
+*.ppk
+id_rsa*
+id_ed25519*
+known_hosts
