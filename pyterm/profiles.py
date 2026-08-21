@@ -50,6 +50,7 @@ class Profile:
     font_family: str = ""  # empty = platform default monospace
     font_size: int = 11
     log_path: str = ""  # empty = no logging
+    device_syntax: str = "none"  # see ui/highlight.py SYNTAX_LABELS
 
     def copy(self) -> Profile:
         return Profile(**asdict(self))

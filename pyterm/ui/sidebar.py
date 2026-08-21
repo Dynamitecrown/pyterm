@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from ..profiles import Profile, ProfileStore
 from ..settings import AppSettings
 from .dialogs import SerialPage, SSHPage, TerminalPage
+from .highlight import SYNTAX_LABELS
 
 
 class SessionSidebar(QWidget):
@@ -44,6 +45,10 @@ class SessionSidebar(QWidget):
         self.kind.addItem("SSH", "ssh")
         self.kind.addItem("Serial", "serial")
         self.kind.currentIndexChanged.connect(self._sync_kind)
+
+        self.device_syntax = QComboBox()
+        for value, label in SYNTAX_LABELS.items():
+            self.device_syntax.addItem(label, value)
 
         self.ssh_page = SSHPage()
         self.serial_page = SerialPage()
@@ -68,12 +73,17 @@ class SessionSidebar(QWidget):
         kind_row.addWidget(QLabel("Type"))
         kind_row.addWidget(self.kind, 1)
 
+        device_row = QHBoxLayout()
+        device_row.addWidget(QLabel("Device"))
+        device_row.addWidget(self.device_syntax, 1)
+
         heading = QLabel("New session")
         heading.setObjectName("sectionHeading")
 
         form_box = QVBoxLayout()
         form_box.addWidget(heading)
         form_box.addLayout(kind_row)
+        form_box.addLayout(device_row)
         form_box.addWidget(self.tabs)
         form_box.addWidget(connect_btn)
 
@@ -130,6 +140,8 @@ class SessionSidebar(QWidget):
     def _apply_profile(self, p: Profile) -> None:
         index = self.kind.findData(p.kind)
         self.kind.setCurrentIndex(max(index, 0))
+        syntax_index = self.device_syntax.findData(p.device_syntax)
+        self.device_syntax.setCurrentIndex(max(syntax_index, 0))
         self.ssh_page.load(p)
         self.serial_page.load(p)
         self.term_page.load(p)
@@ -144,6 +156,7 @@ class SessionSidebar(QWidget):
         self.serial_page.apply(p)
         self.term_page.apply(p)
         p.kind = kind
+        p.device_syntax = self.device_syntax.currentData()
         return p
 
     def _sync_tab_sizes(self, index: int) -> None:

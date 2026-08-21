@@ -79,6 +79,11 @@ On Linux you'll need to be in the `dialout` group to open serial ports
   custom foreground/background/cursor/selection colours), default font and
   size for new sessions, and default scrollback. Sidebar can be hidden with
   `Ctrl+B`.
+- **Device syntax highlighting** — pick a device type in the sidebar
+  (currently just Cisco IOS, or None) and its keywords, IP addresses, `no`
+  negations, and prompt line get coloured wherever they appear on screen —
+  what you type and what the device sends back both go through the buffer
+  the same way, so both light up.
 
 Passwords are deliberately never written to disk.
 
@@ -123,7 +128,7 @@ dump triggers a full repaint per packet and the UI crawls.
 
 **A new transport (telnet, raw TCP, local shell):** write one file in
 `transport/`, subclass `Transport`, decorate with `@register("telnet",
-"Telnet")`, and add it to `_load()`. Add the kind to the dialog's combo box.
+"Telnet")`, and add it to `_load()`. Add the kind to the sidebar's combo box.
 Nothing else changes.
 
 **Colour schemes:** the four theme colours (foreground/background/cursor/
@@ -131,6 +136,13 @@ selection) live in `settings.py`'s `THEMES` dict and are app-wide, set via
 Preferences. The 16-colour ANSI palette used for SGR codes is still the
 fixed `PALETTE` dict at the top of `ui/terminal.py` — move it into
 `AppSettings` too if you want that themeable as well.
+
+**A new device syntax:** add an entry to `SYNTAXES` in `ui/highlight.py` —
+a list of `(regex, category)` pairs, where `category` is a key in `COLORS`
+— and a label in `SYNTAX_LABELS`. It shows up in the sidebar's Device combo
+automatically. Regexes run against each visible line's plain text, so
+keep them simple; they don't see anything pyte's screen model already
+threw away (like which bytes came from you vs. the far end).
 
 **Keyboard tweaks:** `ui/keys.py` is a lookup table. If you hit an old box
 where Backspace misbehaves, flip `Qt.Key_Backspace` to `b"\x08"`.

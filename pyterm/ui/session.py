@@ -67,6 +67,7 @@ class SessionTab(QWidget):
             font_family=profile.font_family,
             font_size=profile.font_size,
             theme=theme,
+            syntax=profile.device_syntax,
         )
         self.banner = QLabel()
         self.banner.setVisible(False)

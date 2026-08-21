@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..emulation import Terminal
 from . import keys
+from .highlight import highlight_line
 
 # --------------------------------------------------------------------------
 # Palette. pyte reports colours either as a name (the 16 ANSI colours) or as
@@ -61,9 +62,10 @@ class TerminalWidget(QWidget):
 
     def __init__(self, scrollback: int = 5000, font_family: str = "",
                  font_size: int = 11, theme: dict[str, str] | None = None,
-                 parent=None):
+                 syntax: str = "none", parent=None):
         super().__init__(parent)
         self.terminal = Terminal(80, 24, scrollback)
+        self._syntax = syntax
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAttribute(Qt.WA_OpaquePaintEvent, True)
@@ -127,6 +129,10 @@ class TerminalWidget(QWidget):
         self._apply_theme(theme)
         self.update()
 
+    def set_syntax(self, syntax: str) -> None:
+        self._syntax = syntax
+        self.update()
+
     def sizeHint(self):
         from PySide6.QtCore import QSize
         return QSize(int(self._cw * 80) + 4, int(self._ch * 24) + 4)
@@ -185,10 +191,15 @@ class TerminalWidget(QWidget):
         for y in range(first, last):
             line = buffer[y]
             top = y * ch
+            row_overrides: dict[int, str] = {}
+            if self._syntax != "none":
+                row_text = "".join(line[i].data for i in range(cols))
+                row_overrides = highlight_line(row_text, self._syntax)
             x = 0
             while x < cols:
                 char = line[x]
                 selected = sel is not None and sel[0] <= (y * cols + x) <= sel[1]
+                override = row_overrides.get(x)
 
                 # Coalesce the run of cells sharing this style, so a full line
                 # of plain text is one drawText call instead of eighty.
@@ -198,9 +209,9 @@ class TerminalWidget(QWidget):
                     nxt_sel = (sel is not None
                                and sel[0] <= (y * cols + run_end) <= sel[1])
                     if (nxt.fg, nxt.bg, nxt.bold, nxt.italics, nxt.underscore,
-                            nxt.reverse, nxt_sel) != (
+                            nxt.reverse, nxt_sel, row_overrides.get(run_end)) != (
                             char.fg, char.bg, char.bold, char.italics,
-                            char.underscore, char.reverse, selected):
+                            char.underscore, char.reverse, selected, override):
                         break
                     run_end += 1
 
@@ -208,6 +219,8 @@ class TerminalWidget(QWidget):
                 bg = _resolve(char.bg, bold=False, default=self._bg)
                 if char.reverse:
                     fg, bg = bg, fg
+                if override and not selected:
+                    fg = QColor(override)
                 if selected:
                     bg = QColor(self._selection_bg)
 
